@@ -29,7 +29,8 @@ def download():
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'format': 'best[ext=mp4]',
+            # EL CAMBIO ESTÁ AQUÍ: Busca MP4, si no, el mejor formato disponible sin importar extensión
+            'format': 'best[ext=mp4]/best',
             'socket_timeout': 45
         }
 
@@ -77,10 +78,14 @@ def download():
         })
     
     except yt_dlp.utils.DownloadError as e:
-        if "Sign in to confirm you’re not a bot" in str(e):
-            return jsonify({'error': 'YouTube detectó un bloqueo anti-bot. Asegúrate de pegar el contenido de cookies.txt en la variable COOKIES_TXT_CONTENT de Render.'}), 200
+        error_msg = str(e)
+        if "Sign in to confirm you’re not a bot" in error_msg:
+            return jsonify({'error': 'YouTube detectó un bloqueo anti-bot. Verifica las cookies.'}), 200
+        elif "Requested format is not available" in error_msg:
+             # Mensaje más claro para este error específico
+            return jsonify({'error': 'YouTube no devolvió un MP4 directo para este video específico (los Shorts a veces fallan). Prueba con otro video.'}), 200
         else:
-            return jsonify({'error': f'Error de descarga de yt-dlp: {str(e)}'}), 200
+            return jsonify({'error': f'Error de descarga de yt-dlp: {error_msg}'}), 200
     
     except Exception as e:
         return jsonify({'error': f'El servidor tardó demasiado o falló: {str(e)}'}), 200
