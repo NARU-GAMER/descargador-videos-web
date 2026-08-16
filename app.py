@@ -14,29 +14,46 @@ def download():
         if not url:
             return jsonify({'error': 'URL requerida'}), 400
         
-        # Configuración robusta para Render (timeout alto para que no se corte mientras el usuario espera)
+        # Simplificamos la configuración: 'best' busca el mejor formato que ya tenga video y audio combinados
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'format': 'bestvideo+bestaudio/best',
-            'merge_output_format': 'mp4',
-            'socket_timeout': 60  # Le damos al servidor hasta 60 segundos para buscar el enlace
+            'format': 'best', 
+            'socket_timeout': 30
         }
-        
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            formats = info.get('formats', [])
             
             videos = []
             audios = []
+
+            # SOLUCIÓN 1: Capturar el enlace directo principal (Vital para TikTok e Instagram)
+            if info.get('url'):
+                videos.append({
+                    'quality': info.get('format_note', 'Mejor Calidad'),
+                    'url': info.get('url')
+                })
+            
+            # SOLUCIÓN 2: Explorar la lista de formatos de forma segura (Para YouTube)
+            formats = info.get('formats', [])
             for f in formats:
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
-                    videos.append({
-                        'quality': f.get('format_note', 'Desconocido'),
-                        'url': f.get('url')
-                    })
-                elif f.get('acodec') != 'none' and f.get('vcodec') == 'none':
+                # Aseguramos que no sean nulos antes de comparar
+                vcodec = f.get('vcodec') or 'none'
+                acodec = f.get('acodec') or 'none'
+
+                # Buscamos formatos que tengan video y audio (pre-fusionados)
+                if vcodec != 'none' and acodec != 'none':
+                    # Evitamos duplicar el video principal que ya guardamos arriba
+                    if not any(v['url'] == f.get('url') for v in videos):
+                        videos.append({
+                            'quality': f.get('format_note', 'Normal'),
+                            'url': f.get('url')
+                        })
+                
+                # Buscamos formatos que sean solo audio
+                elif acodec != 'none' and vcodec == 'none':
                     audios.append({
                         'quality': f.get('format_note', 'MP3'),
                         'url': f.get('url')
@@ -49,8 +66,7 @@ def download():
         })
     
     except Exception as e:
-        # Atrapamos cualquier error interno y lo devolvemos como JSON para que el usuario lo vea
-        return jsonify({'error': f'El servidor tardó demasiado o hubo un error: {str(e)}'}), 500
+        return jsonify({'error': f'Hubo un error interno: {str(e)}'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True) 
