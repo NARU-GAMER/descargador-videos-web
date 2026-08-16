@@ -1,7 +1,18 @@
 from flask import Flask, render_template, request, jsonify
 import yt_dlp
+import os
 
 app = Flask(__name__)
+
+# --- NUEVA LÓGICA: Crear cookies.txt desde Variable de Entorno ---
+cookie_content = os.environ.get('COOKIES_TXT_CONTENT')
+if cookie_content:
+    with open('cookies.txt', 'w', encoding='utf-8') as f:
+        f.write(cookie_content)
+    print("✅ Archivo cookies.txt generado exitosamente desde la variable de entorno.")
+else:
+    print("⚠️ Variable COOKIES_TXT_CONTENT no encontrada. Se intentará sin cookies.")
+# ----------------------------------------------------------------
 
 @app.route('/')
 def index():
@@ -14,14 +25,17 @@ def download():
         if not url:
             return jsonify({'error': 'URL requerida'}), 400
         
-        # Simplificamos la configuración: 'best' busca el mejor formato que ya tenga video y audio combinados
         ydl_opts = {
             'quiet': True,
             'no_warnings': True,
             'extract_flat': False,
-            'format': 'best', 
-            'socket_timeout': 30
+            'format': 'best[ext=mp4]',
+            'socket_timeout': 45
         }
+
+        # Verificamos si el archivo existe (creado antes) para añadirlo a la configuración
+        if os.path.exists('cookies.txt'):
+            ydl_opts['cookiefile'] = 'cookies.txt'
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -29,34 +43,31 @@ def download():
             videos = []
             audios = []
 
-            # SOLUCIÓN 1: Capturar el enlace directo principal (Vital para TikTok e Instagram)
             if info.get('url'):
                 videos.append({
                     'quality': info.get('format_note', 'Mejor Calidad'),
                     'url': info.get('url')
                 })
             
-            # SOLUCIÓN 2: Explorar la lista de formatos de forma segura (Para YouTube)
             formats = info.get('formats', [])
             for f in formats:
-                # Aseguramos que no sean nulos antes de comparar
                 vcodec = f.get('vcodec') or 'none'
                 acodec = f.get('acodec') or 'none'
+                format_url = f.get('url')
 
-                # Buscamos formatos que tengan video y audio (pre-fusionados)
+                if not format_url:
+                    continue
+
                 if vcodec != 'none' and acodec != 'none':
-                    # Evitamos duplicar el video principal que ya guardamos arriba
-                    if not any(v['url'] == f.get('url') for v in videos):
+                    if not any(v['url'] == format_url for v in videos):
                         videos.append({
                             'quality': f.get('format_note', 'Normal'),
-                            'url': f.get('url')
+                            'url': format_url
                         })
-                
-                # Buscamos formatos que sean solo audio
                 elif acodec != 'none' and vcodec == 'none':
                     audios.append({
                         'quality': f.get('format_note', 'MP3'),
-                        'url': f.get('url')
+                        'url': format_url
                     })
             
         return jsonify({
@@ -65,8 +76,14 @@ def download():
             'title': info.get('title', 'Video')
         })
     
+    except yt_dlp.utils.DownloadError as e:
+        if "Sign in to confirm you’re not a bot" in str(e):
+            return jsonify({'error': 'YouTube detectó un bloqueo anti-bot. Asegúrate de pegar el contenido de cookies.txt en la variable COOKIES_TXT_CONTENT de Render.'}), 200
+        else:
+            return jsonify({'error': f'Error de descarga de yt-dlp: {str(e)}'}), 200
+    
     except Exception as e:
-        return jsonify({'error': f'Hubo un error interno: {str(e)}'}), 500
+        return jsonify({'error': f'El servidor tardó demasiado o falló: {str(e)}'}), 200
 
 if __name__ == '__main__':
     app.run(debug=True) 
