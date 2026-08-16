@@ -57,23 +57,29 @@
             let pausado = false;
             const warning = document.getElementById('warning');
 
-            // 1. El servidor busca la info en segundo plano desde ya
-            fetch('/download', {
+                        fetch('/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url })
             })
-            .then(response => response.json())
+            .then(response => {
+                // Si el servidor nos devuelve un error HTML (por timeout), aquí lo atrapamos antes de que truene
+                if (!response.ok) {
+                    throw new Error(`El servidor tardó demasiado o falló (Error ${response.status})`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) {
-                    alert('Error: ' + data.error);
+                    alert('Error del servidor: ' + data.error);
                     contadorDiv.style.display = 'none';
                     return;
                 }
-                window.datosDescarga = data; // Guardamos los datos
+                window.datosDescarga = data; 
             })
             .catch(err => {
-                alert('Error: el servidor no respondió a tiempo. Intenta con un video más corto.');
+                // Este es el mensaje que verás en lugar del error raro del "Unexpected token"
+                alert('Error: ' + err.message + '.\n\nEn Render Gratis, los videos muy largos o TikTok/IG pueden tardar más de 30 segundos y expirar. Prueba con un video de YouTube de menos de 2 minutos.');
                 contadorDiv.style.display = 'none';
             });
 
