@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Descargador de Videos</title>
+    <style>
+        /* Fondo de la página estilo Glassmorphism */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Gradiente de fondo colorido para que resalte el vidrio */
+            background: linear-gradient(135deg, #8BC6EC 0%, #9599E2 50%, #a18cd1 100%);
+        }
+
+        /* El contenedor de vidrio */
+        .container {
+            max-width: 500px;
+            width: 90%;
+            padding: 40px 30px;
+            border-radius: 20px;
+            /* El efecto mágico del vidrio */
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+            text-align: center;
+        }
+
+        h1 {
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin-top: 0;
+        }
+
+        p {
+            color: #fff;
+            font-weight: 500;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 90%;
+            padding: 15px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.3);
+            color: #333;
+            outline: none;
+            font-size: 16px;
+            transition: 0.3s;
+            margin-bottom: 15px;
+            backdrop-filter: blur(4px);
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(0, 0, 0, 0.4);
+        }
+
+        input[type="text"]:focus {
+            background: rgba(255, 255, 255, 0.6);
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Botón principal */
+        button {
+            padding: 15px 40px;
+            border-radius: 15px;
+            border: none;
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+            background: linear-gradient(45deg, #0069d9, #004494);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        /* Contador y advertencias */
+        #contador {
+            display: none;
+            margin-top: 25px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+
+        #contador p {
+            margin: 5px 0;
+        }
+
+        #warning {
+            display: none;
+            color: #ffe484;
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 10px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        /* Botones de descarga generados (también con estilo vidrio) */
+        #botonesDescarga {
+            display: none;
+            margin-top: 25px;
+        }
+
+        #botonesDescarga h3 {
+            color: #fff;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            margin-bottom: 10px;
+        }
+
+        #botonesDescarga p {
+            font-weight: 300;
+        }
+
+        #botonesDescarga button {
+            margin: 6px;
+            background: rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: #fff;
+            font-size: 14px;
+            padding: 12px 20px;
+            box-shadow: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        #botonesDescarga button:hover {
+            background: rgba(255, 255, 255, 0.5);
+            color: #000;
+            transform: translateY(-2px);
+        }
+
+        /* Enlaces ancla que rodean a los botones */
+        a {
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Descargador de Videos</h1>
+        <p>Pega el enlace de YouTube, TikTok o Instagram:</p>
+        
+        <input type="text" id="url" placeholder="https://www.youtube.com/watch?v=...">
+        <br>
+        
+        <!-- EL CAMBIO DE TEXTO QUE PEDISTE -->
+        <button id="btnDownload">Descargar</button>
+
+        <div id="contador">
+            <p>Procesando tu enlace, espera <span id="timer">15</span> segundos...</p>
+            <div id="warning">⚠️ No cambies de pestaña o se pausará</div>
+        </div>
+
+        <div id="botonesDescarga"></div>
+    </div>
+
+    <script>
+        document.getElementById('btnDownload').addEventListener('click', function() {
+            const url = document.getElementById('url').value.trim();
+            if (!url) {
+                alert('Pega una URL primero');
+                return;
+            }
+
+            const contadorDiv = document.getElementById('contador');
+            const botonesDiv = document.getElementById('botonesDescarga');
+            contadorDiv.style.display = 'block';
+            botonesDiv.style.display = 'none';
+            document.getElementById('warning').style.display = 'none';
+
+            let segundos = 15;
+            const timerSpan = document.getElementById('timer');
+            timerSpan.textContent = segundos;
+            let pausado = false;
+            const warning = document.getElementById('warning');
+
+            fetch('/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    contadorDiv.style.display = 'none';
+                    return;
+                }
+                window.datosDescarga = data;
+            })
+            .catch(err => {
+                alert('Error al obtener información: ' + err.message);
+                contadorDiv.style.display = 'none';
+            });
+
+            const interval = setInterval(() => {
+                if (document.visibilityState === 'visible') {
+                    if (pausado) {
+                        pausado = false;
+                        warning.style.display = 'none';
+                    }
+                    segundos--;
+                    timerSpan.textContent = segundos;
+                    if (segundos <= 0) {
+                        clearInterval(interval);
+                        contadorDiv.style.display = 'none';
+                        if (window.datosDescarga) {
+                            mostrarBotones(window.datosDescarga);
+                        } else {
+                            botonesDiv.innerHTML = '<p>Cargando enlaces...</p>';
+                            botonesDiv.style.display = 'block';
+                            setTimeout(() => {
+                                if (window.datosDescarga) {
+                                    mostrarBotones(window.datosDescarga);
+                                } else {
+                                    botonesDiv.innerHTML = '<p>No se pudieron obtener los enlaces. Intenta de nuevo.</p>';
+                                }
+                            }, 2000);
+                        }
+                    }
+                } else {
+                    pausado = true;
+                    warning.style.display = 'block';
+                }
+            }, 1000);
+        });
+
+        function mostrarBotones(data) {
+            const botonesDiv = document.getElementById('botonesDescarga');
+            let html = `<h3>${data.title}</h3><p>Elige calidad:</p>`;
+            
+            data.videos.forEach(v => {
+                html += `<a href="${v.url}" download target="_blank"><button>MP4 - ${v.quality}</button></a> `;
+            });
+            
+            data.audios.forEach(a => {
+                html += `<a href="${a.url}" download target="_blank"><button>MP3 - ${a.quality}</button></a> `;
+            });
+
+            botonesDiv.innerHTML = html;
+            botonesDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 
