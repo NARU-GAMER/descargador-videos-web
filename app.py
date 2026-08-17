@@ -43,8 +43,10 @@ def build_ydl_opts():
         'concurrent_fragment_downloads': 1,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android'],   # cliente liviano, menos round-trips que 'web'
-                'player_skip': ['configs'],
+                # 'web' respeta las cookies para el bypass anti-bot; 'android' NO las usa
+                # bien para esto, así que si hay cookies disponibles priorizamos 'web'
+                # y usamos 'android' solo como client secundario de respaldo.
+                'player_client': ['web', 'android'],
                 'skip': ['dash', 'hls', 'translated_subs'],
             },
             'tiktok': {
