@@ -13,6 +13,7 @@
         input[type="text"]:focus { background: rgba(255, 255, 255, 0.6); }
         button { padding: 15px 40px; border-radius: 15px; border: none; background: linear-gradient(45deg, #007bff, #0056b3); color: white; font-size: 18px; font-weight: bold; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3); }
         button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
         #contador { display: none; margin-top: 25px; font-weight: bold; color: #fff; }
         #warning { display: none; color: #ffe484; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 10px; margin-top: 10px; font-size: 14px; }
         #botonesDescarga { display: none; margin-top: 25px; }
@@ -31,99 +32,131 @@
         <button id="btnDownload">Descargar</button>
 
         <div id="contador">
-            <p>Procesando tu enlace, espera <span id="timer">15</span> segundos...</p>
+            <p>Procesando tu enlace, espera <span id="timer">0</span> segundos...</p>
             <div id="warning">⚠️ No cambies de pestaña o se pausará</div>
         </div>
         <div id="botonesDescarga"></div>
     </div>
 
     <script>
-        document.getElementById('btnDownload').addEventListener('click', function() {
+        const btn = document.getElementById('btnDownload');
+        const contadorDiv = document.getElementById('contador');
+        const botonesDiv = document.getElementById('botonesDescarga');
+        const timerSpan = document.getElementById('timer');
+        const warning = document.getElementById('warning');
+
+        const POLL_INTERVAL_MS = 2000;   // consulta status cada 2 segundos
+        const MAX_WAIT_SECONDS = 40;     // tiempo máximo de espera visible al usuario
+
+        let pollTimer = null;
+        let elapsedSeconds = 0;
+        let tickTimer = null;
+
+        btn.addEventListener('click', function() {
             const url = document.getElementById('url').value.trim();
             if (!url) {
                 alert('Pega una URL primero');
                 return;
             }
 
-            const contadorDiv = document.getElementById('contador');
-            const botonesDiv = document.getElementById('botonesDescarga');
+            resetUI();
+            btn.disabled = true;
             contadorDiv.style.display = 'block';
-            botonesDiv.style.display = 'none';
-            document.getElementById('warning').style.display = 'none';
 
-            let segundos = 15; // LOS 15 SEGUNDOS EXACTOS PARA EL ANUNCIO
-            const timerSpan = document.getElementById('timer');
-            timerSpan.textContent = segundos;
-            let pausado = false;
-            const warning = document.getElementById('warning');
-
-                        fetch('/download', {
+            fetch('/start-download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url: url })
             })
             .then(response => {
-                // Si el servidor nos devuelve un error HTML (por timeout), aquí lo atrapamos antes de que truene
                 if (!response.ok) {
-                    throw new Error(`El servidor tardó demasiado o falló (Error ${response.status})`);
+                    throw new Error(`No se pudo iniciar la descarga (Error ${response.status})`);
                 }
                 return response.json();
             })
             .then(data => {
                 if (data.error) {
-                    alert('Error del servidor: ' + data.error);
-                    contadorDiv.style.display = 'none';
+                    mostrarError(data.error);
                     return;
                 }
-                window.datosDescarga = data; 
+                iniciarPolling(data.job_id);
+                iniciarContadorVisible();
             })
             .catch(err => {
-                // Este es el mensaje que verás en lugar del error raro del "Unexpected token"
-                alert('Error: ' + err.message + '.\n\nEn Render Gratis, los videos muy largos o TikTok/IG pueden tardar más de 30 segundos y expirar. Prueba con un video de YouTube de menos de 2 minutos.');
-                contadorDiv.style.display = 'none';
+                mostrarError(err.message);
             });
+        });
 
-            // 2. Iniciamos el contador de 15 segundos
-            const interval = setInterval(() => {
+        function resetUI() {
+            contadorDiv.style.display = 'none';
+            botonesDiv.style.display = 'none';
+            botonesDiv.innerHTML = '';
+            warning.style.display = 'none';
+            elapsedSeconds = 0;
+            timerSpan.textContent = '0';
+            if (pollTimer) clearInterval(pollTimer);
+            if (tickTimer) clearInterval(tickTimer);
+        }
+
+        function iniciarContadorVisible() {
+            // Solo cuenta segundos "reales" mientras la pestaña está visible,
+            // igual que en la versión anterior, pero ahora acompaña al polling
+            // en vez de determinar cuándo mostrar el resultado.
+            tickTimer = setInterval(() => {
                 if (document.visibilityState === 'visible') {
-                    if (pausado) {
-                        pausado = false;
-                        warning.style.display = 'none';
-                    }
-                    segundos--;
-                    timerSpan.textContent = segundos;
-                    
-                    // Cuando llega a 0, mostramos los resultados
-                    if (segundos <= 0) {
-                        clearInterval(interval);
-                        contadorDiv.style.display = 'none';
+                    warning.style.display = 'none';
+                    elapsedSeconds++;
+                    timerSpan.textContent = elapsedSeconds;
 
-                        if (window.datosDescarga) {
-                            mostrarBotones(window.datosDescarga);
-                        } else {
-                            // Si el servidor es lento, le damos 5 segundos extra de espera
-                            botonesDiv.innerHTML = '<p style="color:#fff;">Cargando enlaces, un momento...</p>';
-                            botonesDiv.style.display = 'block';
-                            setTimeout(() => {
-                                if (window.datosDescarga) {
-                                    mostrarBotones(window.datosDescarga);
-                                } else {
-                                    botonesDiv.innerHTML = '<p style="color:#fff;">El servidor tardó demasiado. <br>Intenta con un video más corto o recarga.</p>';
-                                }
-                            }, 5000); // Espera 5 segundos adicionales
-                        }
+                    if (elapsedSeconds >= MAX_WAIT_SECONDS) {
+                        clearInterval(tickTimer);
+                        clearInterval(pollTimer);
+                        mostrarError('El servidor tardó demasiado. Intenta con otro video o vuelve a intentarlo.');
                     }
                 } else {
-                    pausado = true;
                     warning.style.display = 'block';
                 }
             }, 1000);
-        });
+        }
+
+        function iniciarPolling(jobId) {
+            pollTimer = setInterval(() => {
+                fetch(`/status/${jobId}`)
+                    .then(res => res.json())
+                    .then(job => {
+                        if (job.status === 'done') {
+                            clearInterval(pollTimer);
+                            clearInterval(tickTimer);
+                            contadorDiv.style.display = 'none';
+                            mostrarBotones(job.data);
+                        } else if (job.status === 'error') {
+                            clearInterval(pollTimer);
+                            clearInterval(tickTimer);
+                            mostrarError(job.error);
+                        } else if (job.status === 'not_found') {
+                            clearInterval(pollTimer);
+                            clearInterval(tickTimer);
+                            mostrarError('No se encontró el proceso. Intenta de nuevo.');
+                        }
+                        // si sigue "processing", no hacemos nada y esperamos el próximo poll
+                    })
+                    .catch(() => {
+                        // un fallo puntual de red en el polling no debe abortar todo;
+                        // simplemente se reintenta en el próximo tick
+                    });
+            }, POLL_INTERVAL_MS);
+        }
+
+        function mostrarError(mensaje) {
+            contadorDiv.style.display = 'none';
+            botonesDiv.style.display = 'block';
+            botonesDiv.innerHTML = `<p style="color:#fff;">${mensaje}</p>`;
+            btn.disabled = false;
+        }
 
         function mostrarBotones(data) {
-            const botonesDiv = document.getElementById('botonesDescarga');
             let html = `<h3>${data.title}</h3><p style="color:#fff;">Elige calidad:</p>`;
-            
+
             data.videos.forEach(v => {
                 html += `<a href="${v.url}" download target="_blank"><button>MP4 - ${v.quality}</button></a> `;
             });
@@ -132,6 +165,7 @@
             });
             botonesDiv.innerHTML = html;
             botonesDiv.style.display = 'block';
+            btn.disabled = false;
         }
     </script>
 </body>
